@@ -16,7 +16,6 @@ def addNewClient(data):
     data_dict = data.model_dump()  # ✅ convert to dict
     #// CLIENT
     newclient = data_dict['client']
-    print(newclient)
     clientKeys = {k: v for k, v in newclient.items() if v is not None}
     if not clientKeys:
         return  # Nothing to update
@@ -25,29 +24,70 @@ def addNewClient(data):
     client_sql = f"INSERT INTO clients ({clientcols}) VALUES ({client_placeholders})"
     clientvals = list(clientKeys.values())
 
+    dswd = data_dict.get('dswd', [])
     otherCharges = data_dict.get('otherCharges', [])
+    payments = data_dict.get('payments', [])
+
 
     with sqlite3.connect(db_name, timeout=30) as connection:
         cursor = connection.cursor()
         cursor.execute(client_sql, clientvals)
         client_id = cursor.lastrowid  # Get the last inserted client ID for foreign key reference
 
-        if not otherCharges:
-            return
+        if otherCharges:
+            for oc in otherCharges:
+                oc_keys = {k: v for k, v in oc.items() if v is not None}
+                if not oc_keys:
+                    continue
+                if 'amount' not in oc_keys:
+                    raise ValueError('otherCharges entry must include amount')
 
-        for oc in otherCharges:
-            oc_keys = {k: v for k, v in oc.items() if v is not None}
-            if not oc_keys:
-                continue
-            if 'amount' not in oc_keys:
-                raise ValueError('otherCharges entry must include amount')
+                oc_cols = ", ".join(oc_keys.keys())
+                oc_placeholders = ", ".join("?" for _ in oc_keys)
+                oc_sql = f"INSERT INTO other_charges (client_id, {oc_cols}) VALUES (?, {oc_placeholders})"
+                oc_vals = [client_id] + list(oc_keys.values())
+                cursor.execute(oc_sql, oc_vals)
 
-            oc_cols = ", ".join(oc_keys.keys())
-            oc_placeholders = ", ".join("?" for _ in oc_keys)
-            oc_sql = f"INSERT INTO other_charges (client_id, {oc_cols}) VALUES (?, {oc_placeholders})"
-            oc_vals = [client_id] + list(oc_keys.values())
-            cursor.execute(oc_sql, oc_vals)
+        if dswd:
+            dswd_keys = {k: v for k, v in dswd.items() if v is not None}
+            if not dswd_keys:
+                return
+            else:
+                dswd_cols = ", ".join(dswd_keys.keys())
+                dswd_placeholders = ", ".join("?" for _ in dswd_keys)
+                dswd_sql = f"INSERT INTO dswd (client_id, {dswd_cols}) VALUES (?, {dswd_placeholders})"
+                dswd_vals = [client_id] + list(dswd_keys.values())
+                cursor.execute(dswd_sql, dswd_vals)
 
+        if payments:
+            for p in payments:
+                # Ensure we have the right keys
+                p_keys = {k: v for k, v in p.items() if v is not None}
+
+                if not p_keys:
+                    continue
+
+                mapped = {
+                    "date_paid": p_keys.get("date_paid"),
+                    "amount_paid": p_keys.get("amount_paid"),
+                    "details": p_keys.get("details")
+                }
+
+                if not mapped["date_paid"] or not mapped["amount_paid"]:
+                    continue
+
+                cols = ", ".join(mapped.keys())
+                placeholders = ", ".join("?" for _ in mapped)
+
+                sql = f"""
+                    INSERT INTO payments (client_id, {cols})
+                    VALUES (?, {placeholders})
+                """
+
+                vals = [client_id] + list(mapped.values())
+                cursor.execute(sql, vals)
+    return data
+            
 def updateClient(client_id: int, payload: dict):
     old_data = getClient(client_id)
     new_client_data = split_payload(client_id, payload, old_data)

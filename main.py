@@ -16,10 +16,14 @@ app.add_middleware(
 )
 
 @app.post("/+client")
-def add_client(newClient: NewClient):
-    print(newClient)
-    addNewClient(newClient)
-    return "Client added successfully"
+async def add_client(newClient: NewClient):
+    result = addNewClient(newClient)
+    print("New client added with ID:", result)
+    return {
+        "success": True,
+        "message": "Client added successfully",
+        "client_id": result
+    }
 
 @app.get("/*clients")
 def get_clients():

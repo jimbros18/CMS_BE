@@ -16,8 +16,8 @@ class Client(BaseModel):
 
 
 class DSWD(BaseModel):
-    glDate: Optional[str] = None
-    ciNumber: Optional[str] = None
+    gl_date: Optional[str] = None
+    ci_number: Optional[str] = None
     processor: Optional[str] = None
     amount: Optional[float] = None
     status: Optional[str] = None    
@@ -31,8 +31,8 @@ class OtherCharges(BaseModel):
 
 
 class Payment(BaseModel):
-    datePaid: Optional[str] = None
-    amountPaid: Optional[float] = None
+    date_paid: Optional[str] = None
+    amount_paid: Optional[float] = None
     details: Optional[str] = None
 
 
