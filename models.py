@@ -14,6 +14,13 @@ class Client(BaseModel):
     coffinAmount: Optional[float] = None
     notes: Optional[str] = None
 
+class Inclusions(BaseModel):
+    items: Optional[List[str]] = None
+
+class OtherCharges(BaseModel):
+    item_service: Optional[str] = None
+    amount: Optional[float] = None
+    details: Optional[str] = None
 
 class DSWD(BaseModel):
     gl_date: Optional[str] = None
@@ -23,21 +30,14 @@ class DSWD(BaseModel):
     status: Optional[str] = None    
     notes: Optional[str] = None
 
-
-class OtherCharges(BaseModel):
-    item_service: Optional[str] = None
-    amount: Optional[float] = None
-    details: Optional[str] = None
-
-
 class Payment(BaseModel):
     date_paid: Optional[str] = None
     amount_paid: Optional[float] = None
     details: Optional[str] = None
 
-
 class NewClient(BaseModel):
     client: Client
+    inclusions: List[str] = []
     dswd: DSWD | None = None
     otherCharges: List[OtherCharges] = []
     payments: List[Payment] = []

@@ -27,12 +27,20 @@ def addNewClient(data):
     dswd = data_dict.get('dswd', [])
     otherCharges = data_dict.get('otherCharges', [])
     payments = data_dict.get('payments', [])
+    inclusions = data_dict.get('inclusions', [])
 
 
     with sqlite3.connect(db_name, timeout=30) as connection:
         cursor = connection.cursor()
         cursor.execute(client_sql, clientvals)
         client_id = cursor.lastrowid  # Get the last inserted client ID for foreign key reference
+
+        if inclusions:
+            for inc in inclusions:
+                cursor.execute(
+                    "INSERT INTO inc_accessories (client_id, item) VALUES (?, ?)",
+                    (client_id, inc)
+                )
 
         if otherCharges:
             for oc in otherCharges:
@@ -86,7 +94,7 @@ def addNewClient(data):
 
                 vals = [client_id] + list(mapped.values())
                 cursor.execute(sql, vals)
-    return data
+    return data_dict
             
 def updateClient(client_id: int, payload: dict):
     old_data = getClient(client_id)
@@ -99,11 +107,15 @@ def updateClient(client_id: int, payload: dict):
         old_dswd = old_data.get('dswd', [])
         # print(f'dswd: {new_client_data["modified"]["dswd"]}')
         up_dswd_tbl(client_id, new_client_data['modified']['dswd'], old_dswd)
-        
+
+    if 'inserted' in new_client_data and 'inclusions' in new_client_data['inserted']:
+        insert_incs_tbl(client_id, new_client_data['inserted']['inclusions'])
     if 'inserted' in new_client_data and 'otherCharges' in new_client_data['inserted']:
         insert_oc_tbl(client_id, new_client_data['inserted']['otherCharges'])
     if 'inserted' in new_client_data and 'payments' in new_client_data['inserted']:
         insert_payments_tbl(client_id, new_client_data['inserted']['payments'])
+    if 'deleted' in new_client_data and 'inclusions' in new_client_data['deleted']:
+        delete_incs_tbl(client_id, new_client_data['deleted']['inclusions'])
     if 'deleted' in new_client_data and 'otherCharges' in new_client_data['deleted']:
         delete_oc_tbl(client_id, new_client_data['deleted']['otherCharges'])
     if 'deleted' in new_client_data and 'payments' in new_client_data['deleted']:
@@ -123,6 +135,30 @@ def up_client_tbl(client_id: int, client_kv: dict):
     with sqlite3.connect(db_name, timeout=30) as connection:
         cursor = connection.cursor()
         cursor.execute(sql, vals)
+        connection.commit()
+
+def insert_incs_tbl(client_id: int, new_incs: list):
+    if not new_incs:
+        return
+
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        cursor = connection.cursor()
+        cursor.executemany(
+            "INSERT INTO inc_accessories (client_id, item) VALUES (?, ?)",
+            [(client_id, inc) for inc in new_incs]
+        )
+        connection.commit()
+
+def delete_incs_tbl(client_id: int, deleted_incs: list):
+    if not deleted_incs:
+        return
+
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        cursor = connection.cursor()
+        cursor.executemany(
+            "DELETE FROM inc_accessories WHERE client_id = ? AND item = ?",
+            [(client_id, inc) for inc in deleted_incs]
+        )
         connection.commit()
 
 def insert_oc_tbl(client_id: int, oc_list: list):
@@ -264,7 +300,15 @@ def getClient(client_id: int):
         raw_dswd = cursor.fetchall()
         dswd = [dict(d) for d in raw_dswd]
 
-    return {"client": client, "otherCharges": otherCharges, "payments": payments, "dswd": dswd}
+    sql5 = "SELECT item FROM inc_accessories WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row  # 👈 key line
+        cursor = connection.cursor()
+        cursor.execute(sql5, (client_id,))
+        raw_inclusions = cursor.fetchall()
+        inclusions = [i["item"] for i in raw_inclusions]
+
+    return {"client": client, "otherCharges": otherCharges, "payments": payments, "dswd": dswd, "inclusions": inclusions}
 
 def getCoffins():
     sql ="""

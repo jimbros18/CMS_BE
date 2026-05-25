@@ -19,10 +19,26 @@ def split_payload(client_id: int, payload: dict, old: dict):
 
     if client_changes:
         new_client_data['modified']['client'] = client_changes
-
+    
     ### ======================= OTHER CHARGES ==============================
     new_oc = new.get('otherCharges', [])
-    old_oc = old.get('otherCharges', []) 
+    old_oc = old.get('otherCharges', [])
+    new_incs = new.get('inclusions', [])
+    old_incs = old.get('inclusions', [])
+
+    # Items in new but not in old → insert
+    inserted_incs = [i for i in new_incs if i not in old_incs]
+    if inserted_incs:
+        if 'inserted' not in new_client_data:
+            new_client_data['inserted'] = {}
+        new_client_data['inserted']['inclusions'] = inserted_incs
+
+    # Items in old but not in new → delete
+    deleted_incs = [i for i in old_incs if i not in new_incs]
+    if deleted_incs:
+        if 'deleted' not in new_client_data:
+            new_client_data['deleted'] = {}
+        new_client_data['deleted']['inclusions'] = deleted_incs
 
     # DELETE
     deleted_oc_ids = {i["id"] for i in old_oc if "id" in i} - {i["id"] for i in new_oc if "id" in i}
