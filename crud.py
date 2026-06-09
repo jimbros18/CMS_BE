@@ -5,7 +5,33 @@ db_name = 'lafh_transactions_db.sqlite3'
 
 
 def getClients():
-    query = "SELECT id, dateServiced, deceasedFirst, deceasedLast, deceasedMiddle, address, plan, coffin FROM clients"
+    query = """SELECT clients.id, 
+                    dateServiced, 
+                    deceasedFirst, 
+                    deceasedLast, 
+                    deceasedMiddle, 
+                    city, 
+                    plan, 
+                    coffin,
+                    interment_datetime,
+                    COALESCE(p.total_paid, 0) + COALESCE(dswd.amount, 0) AS total_paid,
+                    (coffinAmount + COALESCE(oc.total_oc, 0)) 
+                        - (COALESCE(p.total_paid, 0) + COALESCE(dswd.amount, 0)) AS balance
+                FROM clients
+                LEFT JOIN (
+                    SELECT client_id, SUM(amount_paid) AS total_paid
+                    FROM payments
+                    GROUP BY client_id
+                ) p ON clients.id = p.client_id
+                LEFT JOIN (
+                    SELECT client_id, SUM(amount) AS total_oc
+                    FROM other_charges
+                    GROUP BY client_id
+                ) oc ON clients.id = oc.client_id
+                LEFT JOIN dswd ON clients.id = dswd.client_id
+                """
+    # COALESCE(dswd.amount, 0) AS dswd_amount,
+    
     with sqlite3.connect(db_name, timeout=30) as connection:
         cursor = connection.cursor()
         cursor.execute(query)
@@ -308,7 +334,15 @@ def getClient(client_id: int):
         raw_inclusions = cursor.fetchall()
         inclusions = [i["item"] for i in raw_inclusions]
 
-    return {"client": client, "otherCharges": otherCharges, "payments": payments, "dswd": dswd, "inclusions": inclusions}
+    sql6 = "SELECT * FROM lights_staff WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row
+        cursor = connection.cursor()
+        cursor.execute(sql6, (client_id,))
+        raw_ls = cursor.fetchall()
+        lights_staff = [dict(d) for d in raw_ls]
+
+    return {"client": client, "otherCharges": otherCharges, "payments": payments, "dswd": dswd, "inclusions": inclusions, "lights_staff": lights_staff}
 
 def getCoffins():
     sql ="""
@@ -324,3 +358,13 @@ def getCoffins():
         coffins = [dict(c) for c in raw_coffins]
         # print(coffins)
     return coffins
+
+def getPlans():
+    sql = "SELECT * FROM plans"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row  # 👈 key line
+        cursor = connection.cursor()
+        cursor.execute(sql)
+        raw_plans = cursor.fetchall()
+        plans = [dict(p) for p in raw_plans]
+    return plans

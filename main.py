@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import NewClient
-from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient
+from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans
 
 app = FastAPI()
 
@@ -48,6 +48,10 @@ def update_client(client_id: int, payload: dict):
 @app.get("/coffins")
 def coffins():
     return getCoffins()
+
+@app.get("/plans")
+def plans():
+    return getPlans()
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=True)

@@ -6,7 +6,10 @@ class Client(BaseModel):
     deceasedFirst: str
     deceasedMiddle: Optional[str] = None
     deceasedLast: str
-    address: str
+    province: str
+    city: str
+    barangay: str
+    purok: Optional[str] = None
     cellNumber: Optional[str] = None
     facebook: Optional[str] = None
     plan: Optional[str] = None
