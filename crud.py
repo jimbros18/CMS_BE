@@ -38,6 +38,73 @@ def getClients():
         clients = cursor.fetchall()
     return clients
 
+def getClient(client_id: int):
+    sql = "SELECT * FROM clients WHERE id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row  # 👈 key line
+        cursor = connection.cursor()
+        cursor.execute(sql, (client_id,))
+        raw_client = cursor.fetchone()
+        client = dict(raw_client) if raw_client else None
+
+    sql2 = "SELECT * FROM other_charges WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row  # 👈 key line
+        cursor = connection.cursor()
+        cursor.execute(sql2, (client_id,))
+        raw_oc = cursor.fetchall()
+        otherCharges = [dict(oc) for oc in raw_oc]
+
+    sql3 = "SELECT * FROM payments WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row  # 👈 key line
+        cursor = connection.cursor()
+        cursor.execute(sql3, (client_id,))
+        raw_payments = cursor.fetchall()
+        payments = [dict(p) for p in raw_payments]
+
+    sql4 = "SELECT * FROM dswd WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row  # 👈 key line
+        cursor = connection.cursor()
+        cursor.execute(sql4, (client_id,))
+        raw_dswd = cursor.fetchall()
+        dswd = [dict(d) for d in raw_dswd]
+
+    sql5 = "SELECT item FROM inc_accessories WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row  # 👈 key line
+        cursor = connection.cursor()
+        cursor.execute(sql5, (client_id,))
+        raw_inclusions = cursor.fetchall()
+        inclusions = [i["item"] for i in raw_inclusions]
+
+    sql6 = "SELECT * FROM staff WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row
+        cursor = connection.cursor()
+        cursor.execute(sql6, (client_id,))
+        raw_s = cursor.fetchall()
+        staff = [dict(d) for d in raw_s]
+
+    sql7 = """
+        SELECT l.id, l.item_name 
+        FROM lights l
+        WHERE l.id IN (
+            SELECT value FROM json_each(
+                (SELECT lights FROM staff WHERE client_id = ?)
+            )
+        )
+    """
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row
+        cursor = connection.cursor()
+        cursor.execute(sql7, (client_id,))
+        raw_l = cursor.fetchall()
+        lights = [dict(l) for l in raw_l]
+
+    return {"client": client, "otherCharges": otherCharges, "payments": payments, "dswd": dswd, "inclusions": inclusions, "staff": staff, "lights": lights}
+
 def addNewClient(data):
     data_dict = data.model_dump()  # ✅ convert to dict
     #// CLIENT
@@ -293,56 +360,6 @@ def deleteClient(client_id:int):
         cursor = connection.cursor()
         cursor.execute(sql, (client_id,))
 
-def getClient(client_id: int):
-    sql = "SELECT * FROM clients WHERE id = ?"
-    with sqlite3.connect(db_name, timeout=30) as connection:
-        connection.row_factory = sqlite3.Row  # 👈 key line
-        cursor = connection.cursor()
-        cursor.execute(sql, (client_id,))
-        raw_client = cursor.fetchone()
-        client = dict(raw_client) if raw_client else None
-
-    sql2 = "SELECT * FROM other_charges WHERE client_id = ?"
-    with sqlite3.connect(db_name, timeout=30) as connection:
-        connection.row_factory = sqlite3.Row  # 👈 key line
-        cursor = connection.cursor()
-        cursor.execute(sql2, (client_id,))
-        raw_oc = cursor.fetchall()
-        otherCharges = [dict(oc) for oc in raw_oc]
-
-    sql3 = "SELECT * FROM payments WHERE client_id = ?"
-    with sqlite3.connect(db_name, timeout=30) as connection:
-        connection.row_factory = sqlite3.Row  # 👈 key line
-        cursor = connection.cursor()
-        cursor.execute(sql3, (client_id,))
-        raw_payments = cursor.fetchall()
-        payments = [dict(p) for p in raw_payments]
-
-    sql4 = "SELECT * FROM dswd WHERE client_id = ?"
-    with sqlite3.connect(db_name, timeout=30) as connection:
-        connection.row_factory = sqlite3.Row  # 👈 key line
-        cursor = connection.cursor()
-        cursor.execute(sql4, (client_id,))
-        raw_dswd = cursor.fetchall()
-        dswd = [dict(d) for d in raw_dswd]
-
-    sql5 = "SELECT item FROM inc_accessories WHERE client_id = ?"
-    with sqlite3.connect(db_name, timeout=30) as connection:
-        connection.row_factory = sqlite3.Row  # 👈 key line
-        cursor = connection.cursor()
-        cursor.execute(sql5, (client_id,))
-        raw_inclusions = cursor.fetchall()
-        inclusions = [i["item"] for i in raw_inclusions]
-
-    sql6 = "SELECT * FROM lights_staff WHERE client_id = ?"
-    with sqlite3.connect(db_name, timeout=30) as connection:
-        connection.row_factory = sqlite3.Row
-        cursor = connection.cursor()
-        cursor.execute(sql6, (client_id,))
-        raw_ls = cursor.fetchall()
-        lights_staff = [dict(d) for d in raw_ls]
-
-    return {"client": client, "otherCharges": otherCharges, "payments": payments, "dswd": dswd, "inclusions": inclusions, "lights_staff": lights_staff}
 
 def getCoffins():
     sql ="""
@@ -368,3 +385,13 @@ def getPlans():
         raw_plans = cursor.fetchall()
         plans = [dict(p) for p in raw_plans]
     return plans
+
+def getAllLights():
+    sql = "SELECT * FROM lights"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row  # 👈 key line
+        cursor = connection.cursor()
+        cursor.execute(sql)
+        raw_ls = cursor.fetchall()
+        lights = [dict(l) for l in raw_ls]
+    return lights
