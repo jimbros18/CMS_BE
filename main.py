@@ -43,6 +43,7 @@ def get_client(client_id: int):
 @app.put("/~client/{client_id}")
 def update_client(client_id: int, payload: dict):
     updated_data = updateClient(client_id, payload)
+    # print('updated: ', payload)
     return updated_data
 
 @app.get("/coffins")

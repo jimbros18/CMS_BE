@@ -26,6 +26,7 @@ def split_payload(client_id: int, payload: dict, old: dict):
     new_incs = new.get('inclusions', [])
     old_incs = old.get('inclusions', [])
 
+
     # Items in new but not in old → insert
     inserted_incs = [i for i in new_incs if i not in old_incs]
     if inserted_incs:
@@ -77,6 +78,42 @@ def split_payload(client_id: int, payload: dict, old: dict):
         if 'modified' not in new_client_data:
             new_client_data['modified'] = {}
         new_client_data['modified']['dswd'] = new.get("dswd", [])
+
+    ### ======================= STAFF =========================================
+    new_staff_raw = new.get('staff', [])
+    new_staff = new_staff_raw[0] if isinstance(new_staff_raw, list) and new_staff_raw else {}
+    
+    old_staff_raw = old.get('staff', [])
+    old_staff = old_staff_raw[0] if isinstance(old_staff_raw, list) and old_staff_raw else {}
+
+    if any(v for v in new_staff.values()) and new_staff != old_staff:
+        if 'modified' not in new_client_data:
+            new_client_data['modified'] = {}
+        new_client_data['modified']['staff'] = new_staff
+
+    ### ======================= LIGHTS =========================================
+    new_lights = new.get('lights', [])
+    old_lights  = old.get('lights', [])
+
+    if new_lights is None:
+        return
+
+    if new_lights != old_lights:
+        if 'modified' not in new_client_data:
+            new_client_data['modified'] = {}
+        new_client_data['modified']['lights'] = new_lights
+    
+    new_returned = new.get('returned', [])
+    old_returned = old.get('returned', [])
+
+    if new_returned is None:
+        return
+    
+    if new_returned != old_returned:
+        if 'modified' not in new_client_data:
+            new_client_data['modified'] = {}
+        new_client_data['modified']['returned'] = new_returned
+        print('returned: ', new_client_data['modified']['returned'])
 
     return new_client_data
 

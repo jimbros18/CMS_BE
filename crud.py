@@ -1,4 +1,5 @@
 import sqlite3
+import json
 from utils import run_query, split_payload
 
 db_name = 'lafh_transactions_db.sqlite3'
@@ -87,23 +88,28 @@ def getClient(client_id: int):
         raw_s = cursor.fetchall()
         staff = [dict(d) for d in raw_s]
 
-    sql7 = """
-        SELECT l.id, l.item_name 
-        FROM lights l
-        WHERE l.id IN (
-            SELECT value FROM json_each(
-                (SELECT lights FROM staff WHERE client_id = ?)
-            )
+    sql_lights = """
+        SELECT value FROM json_each(
+            (SELECT lights FROM staff WHERE client_id = ?)
         )
     """
-    with sqlite3.connect(db_name, timeout=30) as connection:
-        connection.row_factory = sqlite3.Row
-        cursor = connection.cursor()
-        cursor.execute(sql7, (client_id,))
-        raw_l = cursor.fetchall()
-        lights = [dict(l) for l in raw_l]
 
-    return {"client": client, "otherCharges": otherCharges, "payments": payments, "dswd": dswd, "inclusions": inclusions, "staff": staff, "lights": lights}
+    sql_returned = """
+        SELECT value FROM json_each(
+            (SELECT returned FROM staff WHERE client_id = ?)
+        )
+    """
+
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        cursor = connection.cursor()
+        
+        cursor.execute(sql_lights, (client_id,))
+        lights = [row[0] for row in cursor.fetchall()]
+        
+        cursor.execute(sql_returned, (client_id,))
+        returned = [row[0] for row in cursor.fetchall()]
+
+    return {"client": client, "otherCharges": otherCharges, "payments": payments, "dswd": dswd, "inclusions": inclusions, "staff": staff, "lights": lights, "returned": returned}
 
 def addNewClient(data):
     data_dict = data.model_dump()  # ✅ convert to dict
@@ -192,15 +198,18 @@ def addNewClient(data):
 def updateClient(client_id: int, payload: dict):
     old_data = getClient(client_id)
     new_client_data = split_payload(client_id, payload, old_data)
-    # print(f'payload: {payload}')
 
     if 'modified' in new_client_data and 'client' in new_client_data['modified']:
         up_client_tbl(client_id, new_client_data['modified']['client'])
     if 'modified' in new_client_data and 'dswd' in new_client_data['modified']:
         old_dswd = old_data.get('dswd', [])
-        # print(f'dswd: {new_client_data["modified"]["dswd"]}')
         up_dswd_tbl(client_id, new_client_data['modified']['dswd'], old_dswd)
-
+    if 'modified' in new_client_data and 'staff' in new_client_data['modified']:
+        update_staff(client_id, new_client_data['modified']['staff'])
+    if 'modified' in new_client_data and 'lights' in new_client_data['modified']:
+        update_lights(client_id, new_client_data['modified']['lights'])
+    if 'modified' in new_client_data and 'returned' in new_client_data['modified']:
+        update_returned(client_id, new_client_data['modified']['returned'])
     if 'inserted' in new_client_data and 'inclusions' in new_client_data['inserted']:
         insert_incs_tbl(client_id, new_client_data['inserted']['inclusions'])
     if 'inserted' in new_client_data and 'otherCharges' in new_client_data['inserted']:
@@ -214,8 +223,47 @@ def updateClient(client_id: int, payload: dict):
     if 'deleted' in new_client_data and 'payments' in new_client_data['deleted']:
         delete_payments_tbl(client_id, new_client_data['deleted']['payments'])
 
+def update_staff(client_id: int, staff: dict):
+    keys = {k: v for k, v in staff.items() if v is not None and k != 'id'}
+    if not keys:
+        return
+
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        cursor = connection.cursor()
+        
+        # check if row exists
+        cursor.execute("SELECT id FROM staff WHERE client_id = ?", (client_id,))
+        exists = cursor.fetchone()
+
+        if exists:
+            cols = ", ".join(f"{k} = ?" for k in keys)
+            sql = f"UPDATE staff SET {cols} WHERE client_id = ?"
+            vals = list(keys.values()) + [client_id]
+            cursor.execute(sql, vals)
+        else:
+            keys['client_id'] = client_id
+            cols = ", ".join(keys.keys())
+            placeholders = ", ".join("?" * len(keys))
+            sql = f"INSERT INTO staff ({cols}) VALUES ({placeholders})"
+            cursor.execute(sql, list(keys.values()))
+
+        connection.commit()
+
+def update_lights(client_id: int, lights: list):
+    sql = "UPDATE staff SET lights = ? WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        cursor = connection.cursor()
+        cursor.execute(sql, (json.dumps(lights), client_id))
+        connection.commit()
+
+def update_returned(client_id: int, returned: list):
+    sql = "UPDATE staff SET returned = ? WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        cursor = connection.cursor()
+        cursor.execute(sql, (json.dumps(returned), client_id))
+        connection.commit()
+
 def up_client_tbl(client_id: int, client_kv: dict):
-    print(f'client_kv: {client_kv}')
     keys = {k: v for k, v in client_kv.items() if v is not None}
     
     if not keys:
@@ -321,7 +369,7 @@ def delete_payments_tbl(client_id: int, payment_ids: list):
         connection.commit()
     
 def up_dswd_tbl(client_id: int, dswd_kv: dict, old_dswd: dict):
-    print(f'dswd_kv: {dswd_kv}')
+    # print(f'dswd_kv: {dswd_kv}')
 
     # 🔥 filter out unwanted keys too
     keys = {
@@ -359,7 +407,6 @@ def deleteClient(client_id:int):
     with sqlite3.connect(db_name, timeout=30) as connection:
         cursor = connection.cursor()
         cursor.execute(sql, (client_id,))
-
 
 def getCoffins():
     sql ="""
