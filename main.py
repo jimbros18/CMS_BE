@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import NewClient
-from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights
+from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos
 
 app = FastAPI()
 
@@ -43,7 +43,7 @@ def get_client(client_id: int):
 @app.put("/~client/{client_id}")
 def update_client(client_id: int, payload: dict):
     updated_data = updateClient(client_id, payload)
-    # print('updated: ', payload)
+    print('updated: ', payload)
     return updated_data
 
 @app.get("/coffins")
@@ -57,6 +57,15 @@ def plans():
 @app.get("/lights")
 def lights():
     return getAllLights()
+
+@app.get("/asst_providers")
+def providers():
+    return getAsstProviders()
+
+@app.get("/clients/charges")
+def allclientInfos():
+    data = getallclientInfos()
+    return data
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=True)

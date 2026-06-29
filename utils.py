@@ -73,11 +73,32 @@ def split_payload(client_id: int, payload: dict, old: dict):
             new_client_data['inserted'] = {}
         new_client_data['inserted']['payments'] = list(new_payment_items)
 
-    ### ======================= DSWD ================================================
-    if new.get('dswd', []) != old.get('dswd', []):
+## ====================ASSISTANCE==============================================
+    new_asst = new.get('assistance', [])
+    old_asst = old.get('assistance', [])
+
+    # INSERT new ones (no id)
+    new_asst_items = [i for i in new_asst if 'id' not in i]
+    if new_asst_items:
+        if 'inserted' not in new_client_data:
+            new_client_data['inserted'] = {}
+        new_client_data['inserted']['assistance'] = new_asst_items
+
+    # DELETE removed ones
+    deleted_asst_ids = {i["id"] for i in old_asst if "id" in i} - {i["id"] for i in new_asst if "id" in i}
+    if deleted_asst_ids:
+        if 'deleted' not in new_client_data:
+            new_client_data['deleted'] = {}
+        new_client_data['deleted']['assistance'] = list(deleted_asst_ids)
+
+    # UPDATE existing ones
+    modified_asst = [i for i in new_asst if 'id' in i]
+    old_asst_dict = {i["id"]: i for i in old_asst if "id" in i}
+    changed_asst = [i for i in modified_asst if i != old_asst_dict.get(i["id"])]
+    if changed_asst:
         if 'modified' not in new_client_data:
             new_client_data['modified'] = {}
-        new_client_data['modified']['dswd'] = new.get("dswd", [])
+        new_client_data['modified']['assistance'] = changed_asst
 
     ### ======================= STAFF =========================================
     new_staff_raw = new.get('staff', [])
