@@ -65,6 +65,7 @@ def providers():
 @app.get("/clients/charges")
 def allclientInfos():
     data = getallclientInfos()
+    # print('Reports: ', data)
     return data
 
 if __name__ == "__main__":

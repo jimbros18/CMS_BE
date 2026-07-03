@@ -45,13 +45,19 @@ def getallclientInfos():
     with sqlite3.connect(db_name, timeout=30) as connection:
         connection.row_factory = sqlite3.Row
         cursor = connection.cursor()
-        
-        cursor.execute("SELECT * FROM clients")
+        query = """
+            SELECT id, dateServiced, deceasedFirst, deceasedLast, city, province, plan, coffin, coffinAmount FROM clients
+            """
+        cursor.execute(query)
         clients = [dict(c) for c in cursor.fetchall()]
         
         for client in clients:
             cursor.execute("SELECT * FROM other_charges WHERE client_id = ?", (client['id'],))
             client['otherCharges'] = [dict(oc) for oc in cursor.fetchall()]
+
+        for client in clients:
+            cursor.execute("SELECT * FROM inc_accessories WHERE client_id = ?", (client['id'],))
+            client['inclusions'] = [dict(i) for i in cursor.fetchall()]
         
         return clients
 
@@ -445,7 +451,6 @@ def delete_assistance_tbl(client_id: int, ids: list):
             [(client_id, i) for i in ids]
         )
         connection.commit()
-
 
 def deleteClient(client_id:int):
     sql = "DELETE FROM clients WHERE id = ?"
