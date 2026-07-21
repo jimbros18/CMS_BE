@@ -44,3 +44,7 @@ class NewClient(BaseModel):
     dswd: DSWD | None = None
     otherCharges: List[OtherCharges] = []
     payments: List[Payment] = []
+
+class LoginPayload(BaseModel):
+    email: str
+    password: str

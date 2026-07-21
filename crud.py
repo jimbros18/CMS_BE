@@ -1,16 +1,33 @@
 import sqlite3
 import json
+from fastapi import HTTPException
 from utils import run_query, split_payload
+
 
 db_name = 'lafh_transactions_db.sqlite3'
 
+
+def sign_in(supabase, email: str, password: str):
+    try:
+        res = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        # if res.user.email == email:
+        #     return {'status': 'success', 'user': res.user.email}
+        return {'status': 'success', 'user': res.user.email}
+    except Exception as e:
+        print("Supabase error:", e)  # ✅ add this
+        raise HTTPException(status_code=401, detail=str(e))
 
 def getClients():
     query = """SELECT clients.id, 
                     dateServiced, 
                     deceasedFirst, 
                     deceasedLast, 
+                    barangay,
                     city, 
+                    province,
                     plan, 
                     coffin,
                     interment_datetime,

@@ -1,9 +1,13 @@
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from supabase import create_client
+from models import LoginPayload, NewClient
+from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos, sign_in
+from dotenv import load_dotenv
+import os
 
-from models import NewClient
-from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos
+
 
 app = FastAPI()
 
@@ -14,6 +18,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+print("SUPABASE_URL:", SUPABASE_URL)
+
+@app.post("/sign_in")
+async def Sign_in( login_payload: LoginPayload):
+    print("received:", login_payload)
+    response = sign_in(supabase, login_payload.email, login_payload.password)
+    return response
 
 @app.post("/+client")
 async def add_client(newClient: NewClient):
