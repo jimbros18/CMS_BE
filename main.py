@@ -1,5 +1,8 @@
+from urllib import response
+from fastapi import Request
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from models import LoginPayload, NewClient
@@ -13,7 +16,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or ["*"] for all (dev only)
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -21,17 +24,106 @@ app.add_middleware(
 
 
 load_dotenv()
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-print("SUPABASE_URL:", SUPABASE_URL)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+# Debug: Print environment variables (remove in production)
+print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
+print("SUPABASE_KEY:", os.getenv("SUPABASE_KEY")[:10] + "..." if os.getenv("SUPABASE_KEY") else "Not found")
+
+
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+# print("SUPABASE_URL:", SUPABASE_URL)
+
+app = FastAPI()
+
+# CORS Configuration - MUST be the first middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"]
+)
+
+
+
+# Routes
+@app.get("/")
+async def root():
+    return {"message": "API is running"}
+
+@app.get("/me")
+async def me(request: Request):
+    cookie = request.cookies.get("isAuthenticated")
+    if cookie == "true":
+        return {"status": "authenticated"}
+    raise HTTPException(status_code=401, detail="Not authenticated")
 
 @app.post("/sign_in")
-async def Sign_in( login_payload: LoginPayload):
-    print("received:", login_payload)
-    response = sign_in(supabase, login_payload.email, login_payload.password)
+async def sign_in_endpoint(login_payload: LoginPayload):
+    try:
+        print(f"Login attempt for: {login_payload.email}")
+        
+        res = sign_in(supabase, login_payload.email, login_payload.password)
+        print(f"Sign in result: {res}")
+        
+        if res.get('status') == 'success':
+            response = JSONResponse(content={
+                "status": "success",
+                "message": "Login successful",
+                "user": res.get('user')
+            })
+            
+            # For proxy - same origin, so use lax
+            response.set_cookie(
+                key="isAuthenticated",
+                value="true",
+                path="/",
+                httponly=False,
+                samesite="lax",  # Use 'lax' since it's same origin with proxy
+                secure=False,
+                max_age=60*60*24*7,
+                # NO domain specified - let browser handle it
+            )
+            
+            print("Cookie SET for proxy")
+            return response
+        
+        return JSONResponse(
+            content={"status": "error", "message": res.get('message', 'Invalid credentials')},
+            status_code=401
+        )
+        
+    except Exception as e:
+        print(f"Error in sign_in: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            content={"status": "error", "message": str(e)},
+            status_code=500
+        )
+
+@app.post("/sign_out")
+async def sign_out():
+    response = JSONResponse(content={"status": "success"})
+    response.delete_cookie(
+        key="isAuthenticated",
+        path="/"
+    )
     return response
+
+@app.post("/+client")
+async def add_client(newClient: NewClient):
+    data = addNewClient(newClient)
+    print("New client added with ID:", data)
+    return {
+        "success": True,
+        "message": "Client added successfully",
+    }
 
 @app.post("/+client")
 async def add_client(newClient: NewClient):
