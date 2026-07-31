@@ -25,25 +25,33 @@ class OtherCharges(BaseModel):
     amount: Optional[float] = None
     details: Optional[str] = None
 
-class DSWD(BaseModel):
+class Assistance(BaseModel):
+    provider: Optional[str] = None
     gl_date: Optional[str] = None
     ci_number: Optional[str] = None
     processor: Optional[str] = None
     amount: Optional[float] = None
-    status: Optional[str] = None    
-    notes: Optional[str] = None
 
 class Payment(BaseModel):
     date_paid: Optional[str] = None
     amount_paid: Optional[float] = None
     details: Optional[str] = None
 
+class Staff(BaseModel):
+    embalmer: Optional[str] = None
+    driver: Optional[str] = None
+    helper: Optional[str] = None
+    plate_num: Optional[str] = None
+
 class NewClient(BaseModel):
     client: Client
     inclusions: List[str] = []
-    dswd: DSWD | None = None
+    assistance: List[Assistance] = []
     otherCharges: List[OtherCharges] = []
     payments: List[Payment] = []
+    lights: List[int] = []  
+    staff: List[Staff] = []
+    returned: List[int] = []
 
 class LoginPayload(BaseModel):
     email: str

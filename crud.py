@@ -1,11 +1,41 @@
 import sqlite3
 import json
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
 from utils import run_query, split_payload
+from config import JWT_KEY, PUBLIC_KEY
+import supabase
 
-
+security = HTTPBearer()
 db_name = 'lafh_transactions_db.sqlite3'
 
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    print("token received:", token[:20])
+    try:
+        payload = jwt.decode(token, PUBLIC_KEY, algorithms=["ES256"], audience="authenticated")
+        print("payload:", payload)
+        return payload
+    except jwt.ExpiredSignatureError:
+        print("Token expired")
+        raise HTTPException(status_code=401, detail="Token expired")
+    except Exception as e:
+        print("JWT error:", e)
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def require_role(required_roles: list, supabase):
+    def role_checker(token_data: dict = Depends(verify_token)):
+        user_email = token_data.get('email')
+        profile = supabase.table('profiles').select('role').eq('email', user_email).execute()
+        role = profile.data[0]['role'] if profile.data else None
+        print("user_email:", user_email)
+        print("role:", role)
+        print("required_roles:", required_roles)
+        if role not in required_roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return token_data
+    return role_checker
 
 def sign_in(supabase, email: str, password: str):
     try:
@@ -13,12 +43,24 @@ def sign_in(supabase, email: str, password: str):
             "email": email,
             "password": password
         })
-        # if res.user.email == email:
-        #     return {'status': 'success', 'user': res.user.email}
-        return {'status': 'success', 'user': res.user.email}
+
+        # get profile data
+        profile = supabase.table('profiles').select('role, username, branch').eq('email', email).execute()
+        profile_data = profile.data[0] if profile.data else {}
+
+        return {
+            'status': 'success',
+            'email': res.user.email,
+            'token': res.session.access_token,
+            'refresh_token': res.session.refresh_token,
+            'username': profile_data.get('username', ''),
+            'role': profile_data.get('role'),
+            'branch': profile_data.get('branch', '')
+        }
+    
     except Exception as e:
-        print("Supabase error:", e)  # ✅ add this
-        raise HTTPException(status_code=401, detail=str(e))
+        print("Supabase error:", e)
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
 def getClients():
     query = """SELECT clients.id, 
@@ -30,6 +72,7 @@ def getClients():
                     province,
                     plan, 
                     coffin,
+                    embalmer,
                     interment_datetime,
                     COALESCE(p.total_paid, 0) + COALESCE(a.total_asst, 0) AS total_paid,
                     (coffinAmount + COALESCE(oc.total_oc, 0)) 
@@ -50,6 +93,11 @@ def getClients():
                     FROM assistance
                     GROUP BY client_id
                 ) a ON clients.id = a.client_id
+                LEFT JOIN (
+                    SELECT client_id, embalmer 
+                    FROM staff
+                    GROUP BY client_id
+                ) s ON clients.id = s.client_id
                 """
     
     with sqlite3.connect(db_name, timeout=30) as connection:
@@ -162,10 +210,12 @@ def addNewClient(data):
     client_sql = f"INSERT INTO clients ({clientcols}) VALUES ({client_placeholders})"
     clientvals = list(clientKeys.values())
 
-    dswd = data_dict.get('dswd', [])
+    assistance = data_dict.get('assistance', [])
     otherCharges = data_dict.get('otherCharges', [])
     payments = data_dict.get('payments', [])
     inclusions = data_dict.get('inclusions', [])
+    lights = data_dict.get('lights', [])
+    staff = data_dict.get('staff', [])
 
 
     with sqlite3.connect(db_name, timeout=30) as connection:
@@ -194,16 +244,16 @@ def addNewClient(data):
                 oc_vals = [client_id] + list(oc_keys.values())
                 cursor.execute(oc_sql, oc_vals)
 
-        if dswd:
-            dswd_keys = {k: v for k, v in dswd.items() if v is not None}
-            if not dswd_keys:
-                return
-            else:
-                dswd_cols = ", ".join(dswd_keys.keys())
-                dswd_placeholders = ", ".join("?" for _ in dswd_keys)
-                dswd_sql = f"INSERT INTO dswd (client_id, {dswd_cols}) VALUES (?, {dswd_placeholders})"
-                dswd_vals = [client_id] + list(dswd_keys.values())
-                cursor.execute(dswd_sql, dswd_vals)
+        if assistance:
+            for asst in assistance:
+                asst_keys = {k: v for k, v in asst.items() if v is not None}
+                if not asst_keys:
+                    continue
+                asst_cols = ", ".join(asst_keys.keys())
+                asst_placeholders = ", ".join("?" for _ in asst_keys)
+                asst_sql = f"INSERT INTO assistance (client_id, {asst_cols}) VALUES (?, {asst_placeholders})"
+                asst_vals = [client_id] + list(asst_keys.values())
+                cursor.execute(asst_sql, asst_vals)
 
         if payments:
             for p in payments:
@@ -232,6 +282,24 @@ def addNewClient(data):
 
                 vals = [client_id] + list(mapped.values())
                 cursor.execute(sql, vals)
+
+        # combine lights and staff into one row
+        staff_data = {}
+
+        if staff:
+            s = staff[0] if isinstance(staff, list) else staff
+            staff_data.update({k: v for k, v in s.items() if v is not None})
+
+        if lights:
+            staff_data['lights'] = json.dumps(lights)
+
+        if staff_data:
+            cols = ", ".join(staff_data.keys())
+            placeholders = ", ".join("?" for _ in staff_data)
+            sql = f"INSERT INTO staff (client_id, {cols}) VALUES (?, {placeholders})"
+            vals = [client_id] + list(staff_data.values())
+            cursor.execute(sql, vals)
+
     return data_dict
             
 def updateClient(client_id: int, payload: dict):
@@ -265,6 +333,10 @@ def updateClient(client_id: int, payload: dict):
         delete_oc_tbl(client_id, new_client_data['deleted']['otherCharges'])
     if 'deleted' in new_client_data and 'payments' in new_client_data['deleted']:
         delete_payments_tbl(client_id, new_client_data['deleted']['payments'])
+
+    if new_client_data == old_data: return {'updated': 'false'}
+    print('new_data', new_client_data)
+    return {'updated': 'true'}
 
 def update_staff(client_id: int, staff: dict):
     keys = {k: v for k, v in staff.items() if v is not None and k != 'id'}

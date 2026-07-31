@@ -1,14 +1,13 @@
 from urllib import response
 from fastapi import Request
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Response
+from fastapi import FastAPI, Request, HTTPException, Response, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from models import LoginPayload, NewClient
-from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos, sign_in
-from dotenv import load_dotenv
-import os
+from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos, sign_in, require_role
+from config import SUPABASE_URL, SUPABASE_KEY
 
 
 
@@ -21,18 +20,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-load_dotenv()
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-# Debug: Print environment variables (remove in production)
-print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
-print("SUPABASE_KEY:", os.getenv("SUPABASE_KEY")[:10] + "..." if os.getenv("SUPABASE_KEY") else "Not found")
-
-
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # print("SUPABASE_URL:", SUPABASE_URL)
@@ -63,34 +50,45 @@ async def me(request: Request):
         return {"status": "authenticated"}
     raise HTTPException(status_code=401, detail="Not authenticated")
 
+
+@app.post("/refresh_token")
+async def refresh_token(request: Request):
+    try:
+        body = await request.json()
+        refresh_token = body.get('refresh_token')
+        res = supabase.auth.refresh_session(refresh_token)
+
+        profile = supabase.table('profiles').select('username, branch, role').eq('email', res.user.email).execute()
+        profile_data = profile.data[0] if profile.data else {}
+
+        return {
+            'token': res.session.access_token,
+            'refresh_token': res.session.refresh_token,
+            'user': res.user.email,
+            'username': profile_data.get('username', ''),
+            'branch': profile_data.get('branch', ''),
+            'role': profile_data.get('role', '')
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Session expired")
+
 @app.post("/sign_in")
 async def sign_in_endpoint(login_payload: LoginPayload):
     try:
-        print(f"Login attempt for: {login_payload.email}")
-        
         res = sign_in(supabase, login_payload.email, login_payload.password)
-        print(f"Sign in result: {res}")
         
-        if res.get('status') == 'success':
-            response = JSONResponse(content={
-                "status": "success",
-                "message": "Login successful",
-                "user": res.get('user')
-            })
-            
-            # For proxy - same origin, so use lax
+        if res.get('status') == 'success':            
+            response = JSONResponse(content=res)
             response.set_cookie(
-                key="isAuthenticated",
-                value="true",
-                path="/",
-                httponly=False,
-                samesite="lax",  # Use 'lax' since it's same origin with proxy
-                secure=False,
-                max_age=60*60*24*7,
-                # NO domain specified - let browser handle it
-            )
-            
-            print("Cookie SET for proxy")
+                        key="isAuthenticated",
+                        value="true",
+                        path="/",
+                        httponly=False,
+                        samesite="lax",  # Use 'lax' since it's same origin with proxy
+                        secure=False,
+                        max_age=60*60*24*7,
+                    )
             return response
         
         return JSONResponse(
@@ -127,6 +125,7 @@ async def add_client(newClient: NewClient):
 
 @app.post("/+client")
 async def add_client(newClient: NewClient):
+    print('raw: ', newClient)
     data = addNewClient(newClient)
     print("New client added with ID:", data)
     return {
@@ -141,7 +140,7 @@ def get_clients():
     return clients
 
 @app.delete("/-client/{client_id}")
-def delete_client(client_id: int):
+async def delete_client(client_id: int, token_data: dict = Depends(require_role(['admin'], supabase))):
     deleteClient(client_id)
     return f"{client_id} deleted successfully"
 
@@ -151,10 +150,16 @@ def get_client(client_id: int):
     return client
 
 @app.put("/~client/{client_id}")
-def update_client(client_id: int, payload: dict):
-    updated_data = updateClient(client_id, payload)
-    print('updated: ', payload)
-    return updated_data
+def update_client(client_id: int, payload: dict, token_data: dict = Depends(require_role(['admin', 'moderator'], supabase))):
+    try:
+        updated_data = updateClient(client_id, payload)
+        print(updated_data)
+        return updated_data
+    except Exception as e:
+        print("error:", e)
+        import traceback
+        traceback.print_exc()
+        raise
 
 @app.get("/coffins")
 def coffins():
@@ -175,7 +180,6 @@ def providers():
 @app.get("/clients/charges")
 def allclientInfos():
     data = getallclientInfos()
-    # print('Reports: ', data)
     return data
 
 if __name__ == "__main__":
