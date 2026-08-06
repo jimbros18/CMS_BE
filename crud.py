@@ -219,6 +219,7 @@ def addNewClient(data):
 
 
     with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.cursor()
         cursor.execute(client_sql, clientvals)
         client_id = cursor.lastrowid  # Get the last inserted client ID for foreign key reference

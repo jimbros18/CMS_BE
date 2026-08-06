@@ -144,3 +144,110 @@ def run_query(new_client_data: dict):
             print(f"Update client: set {k} = {v} where id = {new_client_data['client_id']}")
     
     return "data updated successfully"
+
+def parser(response):
+    result = response.json()['results'][0]['response']['result']
+    cols = [c['name'] for c in result['cols']]
+    return [
+        [v.get('value') for v in row]
+        for row in result['rows']
+    ]
+
+def client_parser(data):
+    def parse_value(val):
+        """Convert Turso value to Python type"""
+        if not val:
+            return None
+        if val["type"] == "integer":
+            return int(val["value"])
+        elif val["type"] == "float":
+            return float(val["value"])
+        elif val["type"] == "text":
+            return val["value"]
+        elif val["type"] == "null":
+            return None
+        else:
+            return val["value"]
+    
+    def parse_rows(rows, cols=None):
+        """Convert Turso rows to list of dictionaries"""
+        if not rows:
+            return []
+        
+        result = []
+        for row in rows:
+            if cols:
+                # If column names provided, return dict
+                item = {}
+                for i, val in enumerate(row):
+                    if i < len(cols):
+                        item[cols[i]] = parse_value(val)
+                result.append(item)
+            else:
+                # Return raw parsed values
+                result.append([parse_value(val) for val in row])
+        return result
+    
+    # Define column names for each table
+    client_cols = [
+        "id", "dateServiced", "deceasedFirst", "deceasedLast", 
+        "deceasedMiddle", "cellNumber", "facebook", "city", 
+        "plan", "coffin", "coffinAmount", "notes", 
+        "interment_datetime", "barangay", "purok", "province"
+    ]
+    
+    payments_cols = ["id", "client_id", "date_paid", "amount_paid", "details"]
+    other_charges_cols = ["id", "client_id", "item_service", "amount", "details"]
+    assistance_cols = ["id", "client_id", "gl_date", "provider", "ci_number", "processor", "amount"]
+    inclussions_cols = ["id", "client_id", "accessories"]
+    staff_cols = ["embalmer", "driver", "helper", "plate_num"]
+    
+    # Parse each section
+    client_rows = data.get("client", [])
+    client = parse_rows(client_rows, client_cols)[0] if client_rows else None
+    
+    payments = parse_rows(data.get("payments", []), payments_cols)
+    otherCharges = parse_rows(data.get("otherCharges", []), other_charges_cols)
+    assistance = parse_rows(data.get("assistance", []), assistance_cols)
+    inclussions = parse_rows(data.get("inclussions", []), inclussions_cols)
+    
+    # Parse staff
+    staff_rows = data.get("staff", [])
+    staff = None
+    if staff_rows:
+        staff_dict = {}
+        for i, col in enumerate(staff_cols):
+            if i < len(staff_rows[0]):
+                staff_dict[col] = parse_value(staff_rows[0][i])
+        staff = staff_dict
+    
+    # Parse lights (parse JSON string if needed)
+    lights_rows = data.get("lights", [])
+    lights = []
+    if lights_rows and lights_rows[0]:
+        lights_value = parse_value(lights_rows[0][0])
+        try:
+            lights = eval(lights_value) if lights_value else []
+        except:
+            lights = []
+    
+    # Parse returned (parse JSON string if needed)
+    returned_rows = data.get("returned", [])
+    returned = []
+    if returned_rows and returned_rows[0]:
+        returned_value = parse_value(returned_rows[0][0])
+        try:
+            returned = eval(returned_value) if returned_value else []
+        except:
+            returned = []
+    
+    return {
+        "client": client,
+        "payments": payments,
+        "otherCharges": otherCharges,
+        "assistance": assistance,
+        "inclussions": inclussions,
+        "staff": staff,
+        "lights": lights,
+        "returned": returned
+    }

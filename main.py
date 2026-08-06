@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from models import LoginPayload, NewClient
 from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos, sign_in, require_role
+from turso_con import Client, Clients, Coffins
 from config import SUPABASE_URL, SUPABASE_KEY
 
 
@@ -114,14 +115,14 @@ async def sign_out():
     )
     return response
 
-@app.post("/+client")
-async def add_client(newClient: NewClient):
-    data = addNewClient(newClient)
-    print("New client added with ID:", data)
-    return {
-        "success": True,
-        "message": "Client added successfully",
-    }
+# @app.post("/+client")
+# async def add_client(newClient: NewClient):
+#     data = addNewClient(newClient)
+#     print("New client added with ID:", data)
+#     return {
+#         "success": True,
+#         "message": "Client added successfully",
+#     }
 
 @app.post("/+client")
 async def add_client(newClient: NewClient):
@@ -136,7 +137,8 @@ async def add_client(newClient: NewClient):
 
 @app.get("/*clients")
 def get_clients():
-    clients = getClients()
+    # clients = getClients()
+    clients = Clients()
     return clients
 
 @app.delete("/-client/{client_id}")
@@ -146,7 +148,8 @@ async def delete_client(client_id: int, token_data: dict = Depends(require_role(
 
 @app.get("/getclient/{client_id}")
 def get_client(client_id: int):
-    client = getClient(client_id)
+    # client = getClient(client_id)
+    client = Client(client_id)
     return client
 
 @app.put("/~client/{client_id}")
@@ -163,7 +166,11 @@ def update_client(client_id: int, payload: dict, token_data: dict = Depends(requ
 
 @app.get("/coffins")
 def coffins():
-    return getCoffins()
+    # return getCoffins()
+    coffins = Coffins()
+    print("Coffins data:", coffins)
+    return coffins()
+
 
 @app.get("/plans")
 def plans():
