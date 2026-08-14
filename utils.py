@@ -147,7 +147,7 @@ def run_query(new_client_data: dict):
 
 def parser(response):
     result = response.json()['results'][0]['response']['result']
-    cols = [c['name'] for c in result['cols']]
+    # cols = [c['name'] for c in result['cols']]
     return [
         [v.get('value') for v in row]
         for row in result['rows']
@@ -251,3 +251,13 @@ def client_parser(data):
         "lights": lights,
         "returned": returned
     }
+
+def parse_to_dict(response):
+    result = response.json()['results'][0]['response']['result']
+    cols = [c['name'] for c in result['cols']]
+    return [
+        {cols[i]: v.get('value') for i, v in enumerate(row)}
+        for row in result['rows']
+    ]
+
+

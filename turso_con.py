@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 import requests
 from fastapi import HTTPException, Request
-from utils import parser, client_parser
+from utils import parse_to_dict, parser, client_parser
 
 load_dotenv()
 db_url = os.getenv("DB_URL")
@@ -12,9 +12,7 @@ headers = {
     "Authorization": f"Bearer {db_token}",
     "Content-Type": "application/json"
 }
-
-
-
+# ========================================================================
 def Clients():
     sql = """
         SELECT clients.id, 
@@ -170,33 +168,10 @@ def Coffins():
         response = requests.post(db_url, headers=headers, json=payload)
         response.raise_for_status()
         print("Coffins data: ", response.json())
-        return parser(response)
+        return parse_to_dict(response)
     except Exception as e:
         print(f"❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# def Client(id):
-#     payload = {
-#         "requests": [
-#             {
-#                 "type": "execute",
-#                 "stmt": {
-#                     "sql": "SELECT * FROM clients WHERE id = ?",
-#                     "args": [{"type": "integer", "value": str(id)}]
-#                 }
-#             }
-#         ]
-#     }
+
     
-#     try:
-#         response = requests.post(db_url, headers=headers, json=payload)
-#         print(f"Status: {response.status_code}")
-#         print(f"Response Headers: {response.headers}")
-#         print(f"Response Body: {response.text}")
-#         response.raise_for_status()
-#         return response.json()
-#     except Exception as e:
-#         print(f"❌ Error: {e}")
-#         if hasattr(e, 'response') and e.response:
-#             print(f"Error Response: {e.response.text}")
-#         raise HTTPException(status_code=500, detail=str(e))

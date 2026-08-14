@@ -115,15 +115,6 @@ async def sign_out():
     )
     return response
 
-# @app.post("/+client")
-# async def add_client(newClient: NewClient):
-#     data = addNewClient(newClient)
-#     print("New client added with ID:", data)
-#     return {
-#         "success": True,
-#         "message": "Client added successfully",
-#     }
-
 @app.post("/+client")
 async def add_client(newClient: NewClient):
     print('raw: ', newClient)
@@ -137,7 +128,6 @@ async def add_client(newClient: NewClient):
 
 @app.get("/*clients")
 def get_clients():
-    # clients = getClients()
     clients = Clients()
     return clients
 
@@ -166,10 +156,7 @@ def update_client(client_id: int, payload: dict, token_data: dict = Depends(requ
 
 @app.get("/coffins")
 def coffins():
-    # return getCoffins()
-    coffins = Coffins()
-    print("Coffins data:", coffins)
-    return coffins()
+    return Coffins()
 
 
 @app.get("/plans")
