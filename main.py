@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from models import LoginPayload, NewClient
 from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos, sign_in, require_role
-from turso_con import Client, Clients, Coffins
+from turso_con import Client, Clients, Coffins, Update
 from config import SUPABASE_URL, SUPABASE_KEY
 
 
@@ -145,8 +145,8 @@ def get_client(client_id: int):
 @app.put("/~client/{client_id}")
 def update_client(client_id: int, payload: dict, token_data: dict = Depends(require_role(['admin', 'moderator'], supabase))):
     try:
-        updated_data = updateClient(client_id, payload)
-        print(updated_data)
+        updated_data = Update(client_id, payload)
+        print('Updated data: ', updated_data)
         return updated_data
     except Exception as e:
         print("error:", e)

@@ -6,6 +6,7 @@ import jwt
 from utils import run_query, split_payload
 from config import JWT_KEY, PUBLIC_KEY
 import supabase
+from turso_con import Client, Clients, Coffins
 
 security = HTTPBearer()
 db_name = 'lafh_transactions_db.sqlite3'
@@ -304,7 +305,7 @@ def addNewClient(data):
     return data_dict
             
 def updateClient(client_id: int, payload: dict):
-    old_data = getClient(client_id)
+    old_data = Client(client_id)
     new_client_data = split_payload(client_id, payload, old_data)
 
     if 'modified' in new_client_data and 'client' in new_client_data['modified']:

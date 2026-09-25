@@ -136,6 +136,7 @@ def split_payload(client_id: int, payload: dict, old: dict):
         new_client_data['modified']['returned'] = new_returned
         print('returned: ', new_client_data['modified']['returned'])
 
+    print('split_payload: ', new_client_data)
     return new_client_data
 
 def run_query(new_client_data: dict):

@@ -2,7 +2,8 @@ from dotenv import load_dotenv
 import os
 import requests
 from fastapi import HTTPException, Request
-from utils import parse_to_dict, parser, client_parser
+from turso_services import update_staff
+from utils import parse_to_dict, parser, client_parser, split_payload
 
 load_dotenv()
 db_url = os.getenv("DB_URL")
@@ -61,7 +62,9 @@ def Clients():
     try:
         response = requests.post(db_url, headers=headers, json=payload)
         response.raise_for_status()
-        return parser(response)
+        # return parser(response)
+        return parse_to_dict(response)
+        
     except Exception as e:
         print(f"❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -167,11 +170,20 @@ def Coffins():
     try:
         response = requests.post(db_url, headers=headers, json=payload)
         response.raise_for_status()
-        print("Coffins data: ", response.json())
-        return parse_to_dict(response)
+        coffin = parse_to_dict(response)
+        # print("Coffins : ", coffin) 
+        return coffin
     except Exception as e:
         print(f"❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def Update(id, payload):
+    old_data = Client(id)
+    new_client_data = split_payload(id, payload, old_data)
 
-    
+    if 'modified' in new_client_data and 'staff' in new_client_data['modified']:
+        update_staff(id, new_client_data['modified']['staff'])
+
+    if new_client_data == old_data: return {'updated': 'false'}
+    print('new_data', new_client_data)
+    return {'new data': new_client_data}
