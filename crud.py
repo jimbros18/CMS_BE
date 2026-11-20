@@ -1,67 +1,12 @@
 import sqlite3
 import json
-from fastapi import Depends, HTTPException, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
+from fastapi.security import HTTPBearer
 from utils import run_query, split_payload
-from config import JWT_KEY, PUBLIC_KEY
-import supabase
 from turso_con import Client, Clients, Coffins
 
 security = HTTPBearer()
 db_name = 'lafh_transactions_db.sqlite3'
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    print("token received:", token[:20])
-    try:
-        payload = jwt.decode(token, PUBLIC_KEY, algorithms=["ES256"], audience="authenticated")
-        print("payload:", payload)
-        return payload
-    except jwt.ExpiredSignatureError:
-        print("Token expired")
-        raise HTTPException(status_code=401, detail="Token expired")
-    except Exception as e:
-        print("JWT error:", e)
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-def require_role(required_roles: list, supabase):
-    def role_checker(token_data: dict = Depends(verify_token)):
-        user_email = token_data.get('email')
-        profile = supabase.table('profiles').select('role').eq('email', user_email).execute()
-        role = profile.data[0]['role'] if profile.data else None
-        print("user_email:", user_email)
-        print("role:", role)
-        print("required_roles:", required_roles)
-        if role not in required_roles:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
-        return token_data
-    return role_checker
-
-def sign_in(supabase, email: str, password: str):
-    try:
-        res = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-
-        # get profile data
-        profile = supabase.table('profiles').select('role, username, branch').eq('email', email).execute()
-        profile_data = profile.data[0] if profile.data else {}
-
-        return {
-            'status': 'success',
-            'email': res.user.email,
-            'token': res.session.access_token,
-            'refresh_token': res.session.refresh_token,
-            'username': profile_data.get('username', ''),
-            'role': profile_data.get('role'),
-            'branch': profile_data.get('branch', '')
-        }
-    
-    except Exception as e:
-        print("Supabase error:", e)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
 
 def getClients():
     query = """SELECT clients.id, 
@@ -102,11 +47,15 @@ def getClients():
                 """
     
     with sqlite3.connect(db_name, timeout=30) as connection:
+        # ⚡ THIS IS THE KEY CHANGE: Sets the row factory to return dictionary-like objects
+        connection.row_factory = sqlite3.Row
         cursor = connection.cursor()
         cursor.execute(query)
-        clients = cursor.fetchall()
-    return clients
-
+        rows = cursor.fetchall()
+        
+        # Convert the sqlite3.Row objects into standard Python dictionaries
+        return [dict(row) for row in rows]
+    
 def getallclientInfos():
     with sqlite3.connect(db_name, timeout=30) as connection:
         connection.row_factory = sqlite3.Row
