@@ -493,6 +493,7 @@ def delete_assistance_tbl(client_id: int, ids: list):
         connection.commit()
 
 def deleteClient(client_id:int):
+    print('delete id?:', client_id)
     sql = "DELETE FROM clients WHERE id = ?"
     with sqlite3.connect(db_name, timeout=30) as connection:
         cursor = connection.cursor()
@@ -502,7 +503,7 @@ def getCoffins():
     sql ="""
             SELECT c.coffin_name, c.amount, i.items
             FROM coffins c
-            LEFT JOIN inclusions i ON c.inclusion_id = i.id;
+            LEFT JOIN inclussions i ON c.inclussion_id = i.id;
         """
     with sqlite3.connect(db_name, timeout=30) as connection:
         connection.row_factory = sqlite3.Row  # 👈 key line

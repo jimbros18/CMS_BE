@@ -14,19 +14,8 @@ from pocketbase import PocketBase
 from pocketbase.client import ClientResponseError
 
 
-
-
 app = FastAPI()
 
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # print("SUPABASE_URL:", SUPABASE_URL)
@@ -36,7 +25,7 @@ app = FastAPI()
 # CORS Configuration - MUST be the first middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,18 +100,19 @@ def get_clients():
     return {"clients": clients} 
 
 @app.delete("/-client/{client_id}")
-async def delete_client(client_id: int, user = Depends(require_role(['admin']))):
+async def delete_client(client_id: int, user = Depends(require_role(['admin', 'developer']))):
+    print('delete?', client_id)
     deleteClient(client_id)
     return {"message": f"{client_id} deleted successfully by {user.email}"}
 
 @app.get("/getclient/{client_id}")
 def get_client(client_id: int):
     # client = getClient(client_id)
-    client = Client(client_id)
+    client = getClient(client_id)
     return client
 
 @app.put("/~client/{client_id}")
-def update_client(client_id: int, payload: dict, token_data: dict = Depends(require_role(['admin', 'moderator']))):
+def update_client(client_id: int, payload: dict, user = Depends(require_role(['admin', 'moderator']))):
     try:
         updated_data = updateClient(client_id, payload)
         print('Updated data: ', updated_data)
@@ -135,7 +125,7 @@ def update_client(client_id: int, payload: dict, token_data: dict = Depends(requ
 
 @app.get("/coffins")
 def coffins():
-    return Coffins()
+    return getCoffins()
 
 
 @app.get("/plans")
