@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client
 from models import LoginPayload, NewClient
-from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos
+from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, getIncAccessories, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos
 from turso_con import Client, Clients, Coffins, Update
 from config import SUPABASE_URL, SUPABASE_KEY
 from pocketbase import PocketBase
@@ -15,14 +15,8 @@ from pocketbase.client import ClientResponseError
 
 
 app = FastAPI()
-
-
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-# print("SUPABASE_URL:", SUPABASE_URL)
 
-app = FastAPI()
-
-# CORS Configuration - MUST be the first middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -51,13 +45,11 @@ PB_URL = "http://127.0.0.1:8090"
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
-    
-    # We create a temporary client to validate the specific user's token
+
     pb = PocketBase(PB_URL)
     pb.auth_store.save(token, None)
     
     try:
-        # Ask PocketBase to verify the token and give us the user record
         auth_data = pb.collection("users").auth_refresh()
         return auth_data.record
     except ClientResponseError:
@@ -65,7 +57,6 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 def require_role(required_roles: list):
     def role_checker(user_record = Depends(verify_token)):
-        # Assuming you have a 'role' field in your PocketBase 'users' collection
         user_role = user_record.role 
         
         if user_role not in required_roles:
@@ -84,9 +75,9 @@ async def sign_out():
 
 @app.post("/+client")
 async def add_client(newClient: NewClient):
-    print('raw: ', newClient)
+    # print('raw: ', newClient)
     data = addNewClient(newClient)
-    print("New client added with ID:", data)
+    # print("New client added with ID:", data)
     return {
         "success": True,
         "message": "Client added successfully",
@@ -96,26 +87,23 @@ async def add_client(newClient: NewClient):
 @app.get("/*clients")
 def get_clients():
     clients = getClients()
-    # print("Fetched clients:", clients)
     return {"clients": clients} 
 
 @app.delete("/-client/{client_id}")
 async def delete_client(client_id: int, user = Depends(require_role(['admin', 'developer']))):
-    print('delete?', client_id)
     deleteClient(client_id)
     return {"message": f"{client_id} deleted successfully by {user.email}"}
 
 @app.get("/getclient/{client_id}")
 def get_client(client_id: int):
-    # client = getClient(client_id)
     client = getClient(client_id)
     return client
 
 @app.put("/~client/{client_id}")
 def update_client(client_id: int, payload: dict, user = Depends(require_role(['admin', 'moderator']))):
+    print('PAYLOAD_INCs: ', payload['inclussions'])
     try:
         updated_data = updateClient(client_id, payload)
-        print('Updated data: ', updated_data)
         return updated_data
     except Exception as e:
         print("error:", e)
@@ -135,6 +123,10 @@ def plans():
 @app.get("/lights")
 def lights():
     return getAllLights()
+
+@app.get("/inc_accessories/{client_id}")
+def inc_accessories(client_id: int):
+    return getIncAccessories(client_id)
 
 @app.get("/asst_providers")
 def providers():

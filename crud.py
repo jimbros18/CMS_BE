@@ -114,8 +114,8 @@ def getClient(client_id: int):
         connection.row_factory = sqlite3.Row  # 👈 key line
         cursor = connection.cursor()
         cursor.execute(sql5, (client_id,))
-        raw_inclusions = cursor.fetchall()
-        inclusions = [i["item"] for i in raw_inclusions]
+        raw_inclussions = cursor.fetchall() 
+        inclussions = [i["item"] for i in raw_inclussions]
 
     sql6 = "SELECT * FROM staff WHERE client_id = ?"
     with sqlite3.connect(db_name, timeout=30) as connection:
@@ -146,7 +146,7 @@ def getClient(client_id: int):
         cursor.execute(sql_returned, (client_id,))
         returned = [row[0] for row in cursor.fetchall()]
 
-    return {"client": client, "otherCharges": otherCharges, "payments": payments, "assistance": assistance, "inclusions": inclusions, "staff": staff, "lights": lights, "returned": returned}
+    return {"client": client, "otherCharges": otherCharges, "payments": payments, "assistance": assistance, "inclussions": inclussions, "staff": staff, "lights": lights, "returned": returned}
 
 def addNewClient(data):
     data_dict = data.model_dump()  # ✅ convert to dict
@@ -254,7 +254,7 @@ def addNewClient(data):
     return data_dict
             
 def updateClient(client_id: int, payload: dict):
-    old_data = Client(client_id)
+    old_data = getClient(client_id)
     new_client_data = split_payload(client_id, payload, old_data)
 
     if 'modified' in new_client_data and 'client' in new_client_data['modified']:
@@ -266,27 +266,31 @@ def updateClient(client_id: int, payload: dict):
     if 'modified' in new_client_data and 'assistance' in new_client_data['modified']:
         for asst in new_client_data['modified']['assistance']:
             update_assistance(client_id, asst, old_data.get('assistance', []))
+    ### ======================== STAFF ===========================================
     if 'modified' in new_client_data and 'staff' in new_client_data['modified']:
         update_staff(client_id, new_client_data['modified']['staff'])
+        ### ======================== LIGHTS ===========================================
     if 'modified' in new_client_data and 'lights' in new_client_data['modified']:
         update_lights(client_id, new_client_data['modified']['lights'])
     if 'modified' in new_client_data and 'returned' in new_client_data['modified']:
         update_returned(client_id, new_client_data['modified']['returned'])
-    if 'inserted' in new_client_data and 'inclusions' in new_client_data['inserted']:
-        insert_incs_tbl(client_id, new_client_data['inserted']['inclusions'])
+    ### ======================== INCLUSSIONS ===========================================
+    if 'inserted' in new_client_data and 'inclussions' in new_client_data['inserted']:
+        insert_incs_tbl(client_id, new_client_data['inserted']['inclussions'])
+    if 'deleted' in new_client_data and 'inclussions' in new_client_data['deleted']:
+        delete_incs_tbl(client_id, new_client_data['deleted']['inclussions'])
+
     if 'inserted' in new_client_data and 'otherCharges' in new_client_data['inserted']:
         insert_oc_tbl(client_id, new_client_data['inserted']['otherCharges'])
     if 'inserted' in new_client_data and 'payments' in new_client_data['inserted']:
         insert_payments_tbl(client_id, new_client_data['inserted']['payments'])
-    if 'deleted' in new_client_data and 'inclusions' in new_client_data['deleted']:
-        delete_incs_tbl(client_id, new_client_data['deleted']['inclusions'])
     if 'deleted' in new_client_data and 'otherCharges' in new_client_data['deleted']:
         delete_oc_tbl(client_id, new_client_data['deleted']['otherCharges'])
     if 'deleted' in new_client_data and 'payments' in new_client_data['deleted']:
         delete_payments_tbl(client_id, new_client_data['deleted']['payments'])
 
     if new_client_data == old_data: return {'updated': 'false'}
-    print('new_data', new_client_data)
+    # print('new_data', new_client_data)
     return {'updated': 'true'}
 
 def update_staff(client_id: int, staff: dict):
@@ -351,7 +355,7 @@ def insert_incs_tbl(client_id: int, new_incs: list):
     with sqlite3.connect(db_name, timeout=30) as connection:
         cursor = connection.cursor()
         cursor.executemany(
-            "INSERT INTO inc_accessories (client_id, item) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO inc_accessories (client_id, item) VALUES (?, ?)",
             [(client_id, inc) for inc in new_incs]
         )
         connection.commit()
@@ -501,9 +505,8 @@ def deleteClient(client_id:int):
 
 def getCoffins():
     sql ="""
-            SELECT c.coffin_name, c.amount, i.items
-            FROM coffins c
-            LEFT JOIN inclussions i ON c.inclussion_id = i.id;
+            SELECT c.coffin_name, c.amount, c.items
+            FROM coffins c;
         """
     with sqlite3.connect(db_name, timeout=30) as connection:
         connection.row_factory = sqlite3.Row  # 👈 key line
@@ -533,6 +536,16 @@ def getAllLights():
         raw_ls = cursor.fetchall()
         lights = [dict(l) for l in raw_ls]
     return lights
+
+def getIncAccessories( client_id: int):
+    sql = "SELECT item FROM inc_accessories WHERE client_id = ?"
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row
+        cursor = connection.cursor()
+        cursor.execute(sql, (client_id,))
+        raw_incs = cursor.fetchall()
+        inclussions = [i["item"] for i in raw_incs]
+    return inclussions
 
 def getAsstProviders():
     sql = "SELECT provider FROM asst_providers"

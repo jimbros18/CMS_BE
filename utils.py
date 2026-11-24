@@ -19,28 +19,27 @@ def split_payload(client_id: int, payload: dict, old: dict):
 
     if client_changes:
         new_client_data['modified']['client'] = client_changes
-    
-    ### ======================= OTHER CHARGES ==============================
-    new_oc = new.get('otherCharges', [])
-    old_oc = old.get('otherCharges', [])
-    new_incs = new.get('inclusions', [])
-    old_incs = old.get('inclusions', [])
 
+    ### ============================ INCLUSIONS ============================
+    old_incs = [i.get('item') if isinstance(i, dict) else i for i in old.get('inclussions', [])]
+    new_incs = [i.get('item') if isinstance(i, dict) else i for i in new.get('inclussions', [])]
 
-    # Items in new but not in old → insert
     inserted_incs = [i for i in new_incs if i not in old_incs]
     if inserted_incs:
         if 'inserted' not in new_client_data:
             new_client_data['inserted'] = {}
-        new_client_data['inserted']['inclusions'] = inserted_incs
+        new_client_data['inserted']['inclussions'] = inserted_incs
 
-    # Items in old but not in new → delete
     deleted_incs = [i for i in old_incs if i not in new_incs]
     if deleted_incs:
         if 'deleted' not in new_client_data:
             new_client_data['deleted'] = {}
-        new_client_data['deleted']['inclusions'] = deleted_incs
+        new_client_data['deleted']['inclussions'] = deleted_incs
 
+    ### ======================= OTHER CHARGES ==============================
+    new_oc = new.get('otherCharges', [])
+    old_oc = old.get('otherCharges', [])
+    
     # DELETE
     deleted_oc_ids = {i["id"] for i in old_oc if "id" in i} - {i["id"] for i in new_oc if "id" in i}
     if deleted_oc_ids:
@@ -134,9 +133,9 @@ def split_payload(client_id: int, payload: dict, old: dict):
         if 'modified' not in new_client_data:
             new_client_data['modified'] = {}
         new_client_data['modified']['returned'] = new_returned
-        print('returned: ', new_client_data['modified']['returned'])
+        # print('returned: ', new_client_data['modified']['returned'])
 
-    print('split_payload: ', new_client_data)
+    # print('split_payload: ', new_client_data)
     return new_client_data
 
 def run_query(new_client_data: dict):
