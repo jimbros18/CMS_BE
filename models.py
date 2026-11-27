@@ -6,6 +6,9 @@ class Client(BaseModel):
     deceasedFirst: str
     deceasedMiddle: Optional[str] = None
     deceasedLast: str
+    birthdate: str
+    dateOfDeath: str
+    age: int
     province: str
     city: str
     barangay: str
@@ -17,7 +20,7 @@ class Client(BaseModel):
     coffinAmount: Optional[float] = None
     notes: Optional[str] = None
 
-class Inclusions(BaseModel):
+class Inclussions(BaseModel):
     items: Optional[List[str]] = None
 
 class OtherCharges(BaseModel):
@@ -45,7 +48,7 @@ class Staff(BaseModel):
 
 class NewClient(BaseModel):
     client: Client
-    inclusions: List[str] = []
+    inclussions: List[str] = []
     assistance: List[Assistance] = []
     otherCharges: List[OtherCharges] = []
     payments: List[Payment] = []

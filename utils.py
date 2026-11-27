@@ -1,3 +1,132 @@
+def print_final_state(old_data: dict, diff_data: dict):
+    print("\n" + "="*60)
+    
+    has_changes = False
+
+    def get_client_identity():
+        old_c = old_data.get('client', {})
+        new_c = diff_data.get('modified', {}).get('client', {})
+        c_id = old_c.get('id') or new_c.get('id') or 'N/A'
+        fname = old_c.get('deceasedFirst') or new_c.get('deceasedFirst') or ''
+        lname = old_c.get('deceasedLast') or new_c.get('deceasedLast') or ''
+        name = f"{fname} {lname}".strip()
+        return c_id, name
+
+    client_id, client_name = get_client_identity()
+    base = f"id {client_id}, name: {client_name}"
+
+    # ==================== CLIENT ====================
+    if 'modified' in diff_data and 'client' in diff_data['modified']:
+        has_changes = True
+        print("👤 CLIENT:")
+        for key, new_val in diff_data['modified']['client'].items():
+            old_val = old_data.get('client', {}).get(key)
+            # Only print if it actually changed and isn't the identity fields
+            if old_val != new_val and key not in ('id', 'deceasedFirst', 'deceasedLast'):
+                print(f"  OLD: {base}, {key}: {old_val}")
+                print(f"  NEW: {base}, {key}: {new_val}")
+
+    # ==================== INCLUSIONS ====================
+    if ('inserted' in diff_data and 'inclussions' in diff_data['inserted']) or \
+       ('deleted' in diff_data and 'inclussions' in diff_data['deleted']):
+        has_changes = True
+        old_incs = old_data.get('inclussions', [])
+        new_incs = old_incs.copy()
+        
+        if 'deleted' in diff_data and 'inclussions' in diff_data['deleted']:
+            for item in diff_data['deleted']['inclussions']:
+                if item in new_incs: new_incs.remove(item)
+                
+        if 'inserted' in diff_data and 'inclussions' in diff_data['inserted']:
+            for item in diff_data['inserted']['inclussions']:
+                if item not in new_incs: new_incs.append(item)
+
+        print("🌸 INCLUSIONS:")
+        print(f"  OLD: {base}, inclussions: {old_incs}")
+        print(f"  NEW: {base}, inclussions: {new_incs}")
+
+    # ==================== STAFF ====================
+    if 'modified' in diff_data and 'staff' in diff_data['modified']:
+        has_changes = True
+        old_staff = old_data.get('staff', [{}])[0] if old_data.get('staff') else {}
+        
+        # Check which specific keys changed
+        for key, new_val in diff_data['modified']['staff'].items():
+            old_val = old_staff.get(key)
+            if old_val != new_val and key not in ('id', 'client_id'):
+                print("👷 STAFF:")
+                print(f"  OLD: {base}, {key}: {old_val}")
+                print(f"  NEW: {base}, {key}: {new_val}")
+
+    # ==================== LIGHTS & RETURNED ====================
+    if 'modified' in diff_data and 'lights' in diff_data['modified']:
+        has_changes = True
+        print("💡 LIGHTS:")
+        print(f"  OLD: {base}, lights: {old_data.get('lights')}")
+        print(f"  NEW: {base}, lights: {diff_data['modified']['lights']}")
+        
+    if 'modified' in diff_data and 'returned' in diff_data['modified']:
+        has_changes = True
+        print("🔄 RETURNED:")
+        print(f"  OLD: {base}, returned: {old_data.get('returned')}")
+        print(f"  NEW: {base}, returned: {diff_data['modified']['returned']}")
+
+    # ==================== PAYMENTS ====================
+    if ('inserted' in diff_data and 'payments' in diff_data['inserted']) or \
+       ('deleted' in diff_data and 'payments' in diff_data['deleted']):
+        has_changes = True
+        old_payments = old_data.get('payments', [])
+        new_payments = [p for p in old_payments if p.get('id') not in diff_data.get('deleted', {}).get('payments', [])]
+        
+        if 'inserted' in diff_data and 'payments' in diff_data['inserted']:
+            new_payments.extend(diff_data['inserted']['payments'])
+
+        print("💵 PAYMENTS:")
+        # For list-based items, printing the whole list comparison is usually easier
+        print(f"  OLD: {base}, payments: {old_payments}")
+        print(f"  NEW: {base}, payments: {new_payments}")
+
+    # ==================== OTHER CHARGES ====================
+    if ('inserted' in diff_data and 'otherCharges' in diff_data['inserted']) or \
+       ('deleted' in diff_data and 'otherCharges' in diff_data['deleted']):
+        has_changes = True
+        old_oc = old_data.get('otherCharges', [])
+        new_oc = [o for o in old_oc if o.get('id') not in diff_data.get('deleted', {}).get('otherCharges', [])]
+        
+        if 'inserted' in diff_data and 'otherCharges' in diff_data['inserted']:
+            new_oc.extend(diff_data['inserted']['otherCharges'])
+
+        print("💸 OTHER CHARGES:")
+        print(f"  OLD: {base}, otherCharges: {old_oc}")
+        print(f"  NEW: {base}, otherCharges: {new_oc}")
+
+    # ==================== ASSISTANCE ====================
+    if ('inserted' in diff_data and 'assistance' in diff_data['inserted']) or \
+       ('deleted' in diff_data and 'assistance' in diff_data['deleted']) or \
+       ('modified' in diff_data and 'assistance' in diff_data['modified']):
+        has_changes = True
+        old_asst = old_data.get('assistance', [])
+        
+        new_asst = [a for a in old_asst if a.get('id') not in diff_data.get('deleted', {}).get('assistance', [])]
+        if 'inserted' in diff_data and 'assistance' in diff_data['inserted']:
+            new_asst.extend(diff_data['inserted']['assistance'])
+            
+        if 'modified' in diff_data and 'assistance' in diff_data['modified']:
+            for mod_item in diff_data['modified']['assistance']:
+                for i, item in enumerate(new_asst):
+                    if item.get('id') == mod_item.get('id'):
+                        new_asst[i] = mod_item
+                        break
+
+        print("🤝 ASSISTANCE:")
+        print(f"  OLD: {base}, assistance: {old_asst}")
+        print(f"  NEW: {base}, assistance: {new_asst}")
+
+    if not has_changes:
+        print("  (No changes detected)")
+    
+    print("="*60 + "\n")
+
 def split_payload(client_id: int, payload: dict, old: dict):
     new = payload
     new_client_data = {'client_id': client_id}
@@ -20,7 +149,7 @@ def split_payload(client_id: int, payload: dict, old: dict):
     if client_changes:
         new_client_data['modified']['client'] = client_changes
 
-    ### ============================ INCLUSIONS ============================
+    ### ============================ INCLUSSIONS ============================
     old_incs = [i.get('item') if isinstance(i, dict) else i for i in old.get('inclussions', [])]
     new_incs = [i.get('item') if isinstance(i, dict) else i for i in new.get('inclussions', [])]
 
@@ -133,9 +262,9 @@ def split_payload(client_id: int, payload: dict, old: dict):
         if 'modified' not in new_client_data:
             new_client_data['modified'] = {}
         new_client_data['modified']['returned'] = new_returned
-        # print('returned: ', new_client_data['modified']['returned'])
 
-    # print('split_payload: ', new_client_data)
+
+    print_final_state(old, new_client_data)
     return new_client_data
 
 def run_query(new_client_data: dict):
@@ -259,5 +388,4 @@ def parse_to_dict(response):
         {cols[i]: v.get('value') for i, v in enumerate(row)}
         for row in result['rows']
     ]
-
 

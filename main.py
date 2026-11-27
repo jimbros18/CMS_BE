@@ -1,5 +1,5 @@
 from urllib import response
-from fastapi import Request
+from fastapi import Query, Request
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Response, Depends
 from fastapi.responses import JSONResponse
@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client
 from models import LoginPayload, NewClient
-from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, getIncAccessories, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos
+from crud import addNewClient, deleteClient, getClient, getClients, getCoffins, getFullData, getIncAccessories, updateClient, getPlans, getAllLights, getAsstProviders, getallclientInfos
 from turso_con import Client, Clients, Coffins, Update
 from config import SUPABASE_URL, SUPABASE_KEY
 from pocketbase import PocketBase
@@ -16,6 +16,9 @@ from pocketbase.client import ClientResponseError
 
 app = FastAPI()
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+security = HTTPBearer()
+PB_URL = "http://127.0.0.1:8090"
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,9 +29,6 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-
-
-# Routes
 @app.get("/")
 async def root():
     return {"message": "API is running"}
@@ -39,9 +39,6 @@ async def me(request: Request):
     if cookie == "true":
         return {"status": "authenticated"}
     raise HTTPException(status_code=401, detail="Not authenticated")
-
-security = HTTPBearer()
-PB_URL = "http://127.0.0.1:8090"
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
@@ -75,7 +72,7 @@ async def sign_out():
 
 @app.post("/+client")
 async def add_client(newClient: NewClient):
-    # print('raw: ', newClient)
+    print('NEW CLIENT: ', newClient)
     data = addNewClient(newClient)
     # print("New client added with ID:", data)
     return {
@@ -101,7 +98,7 @@ def get_client(client_id: int):
 
 @app.put("/~client/{client_id}")
 def update_client(client_id: int, payload: dict, user = Depends(require_role(['admin', 'moderator']))):
-    print('PAYLOAD_INCs: ', payload['inclussions'])
+    # print('UPDATE CLIENT PAYLOAD: ', payload)
     try:
         updated_data = updateClient(client_id, payload)
         return updated_data
@@ -136,6 +133,14 @@ def providers():
 def allclientInfos():
     data = getallclientInfos()
     return data
+
+@app.get("/dashboard")
+def get_dashboard_data(month: str = Query(..., description="Format: YYYY-MM")):
+    try:
+        stats = getFullData(month)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=True)

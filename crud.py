@@ -72,7 +72,7 @@ def getallclientInfos():
 
         for client in clients:
             cursor.execute("SELECT * FROM inc_accessories WHERE client_id = ?", (client['id'],))
-            client['inclusions'] = [dict(i) for i in cursor.fetchall()]
+            client['inclussions'] = [dict(i) for i in cursor.fetchall()]
         
         return clients
 
@@ -163,7 +163,7 @@ def addNewClient(data):
     assistance = data_dict.get('assistance', [])
     otherCharges = data_dict.get('otherCharges', [])
     payments = data_dict.get('payments', [])
-    inclusions = data_dict.get('inclusions', [])
+    inclussions = data_dict.get('inclussions', [])
     lights = data_dict.get('lights', [])
     staff = data_dict.get('staff', [])
 
@@ -174,8 +174,8 @@ def addNewClient(data):
         cursor.execute(client_sql, clientvals)
         client_id = cursor.lastrowid  # Get the last inserted client ID for foreign key reference
 
-        if inclusions:
-            for inc in inclusions:
+        if inclussions:
+            for inc in inclussions:
                 cursor.execute(
                     "INSERT INTO inc_accessories (client_id, item) VALUES (?, ?)",
                     (client_id, inc)
@@ -556,3 +556,100 @@ def getAsstProviders():
         raw_prov = cursor.fetchall()
         asst_providers = [dict(l) for l in raw_prov]
     return asst_providers
+
+def getFullData(month_str: str):
+    """
+    Queries all tables for a specific month and calculates dashboard stats.
+    month_str should be in 'YYYY-MM' format (e.g., '2026-11').
+    """
+    search_pattern = f"{month_str}%"
+
+    with sqlite3.connect(db_name, timeout=30) as connection:
+        connection.row_factory = sqlite3.Row
+        cursor = connection.cursor()
+
+        # 1. Fetch all clients for the given month
+        cursor.execute("SELECT * FROM clients WHERE dateServiced LIKE ?", (search_pattern,))
+        clients = [dict(row) for row in cursor.fetchall()]
+
+        stats = {
+            "totalClients": len(clients),
+            "seniors": 0,
+            "grandTotalCoffinAmount": 0,
+            "coffinStats": {},
+            "locationCounts": {},
+            "planCounts": {},
+            "embalmerStats": {}, # NEW
+            "totalPayments": 0,
+            "totalOtherCharges": 0,
+            "totalAssistance": 0
+        }
+
+        for c in clients:
+            client_id = c["id"]
+
+            # --- 2. Query all related tables for this client ---
+            
+            # Inclusions
+            cursor.execute("SELECT item FROM inc_accessories WHERE client_id = ?", (client_id,))
+            inclusions = [row["item"] for row in cursor.fetchall()]
+
+            # Payments
+            cursor.execute("SELECT SUM(amount_paid) AS total FROM payments WHERE client_id = ?", (client_id,))
+            payments_row = cursor.fetchone()
+            total_paid = float(payments_row["total"] or 0)
+
+            # Other Charges
+            cursor.execute("SELECT SUM(amount) AS total FROM other_charges WHERE client_id = ?", (client_id,))
+            oc_row = cursor.fetchone()
+            total_oc = float(oc_row["total"] or 0)
+
+            # Assistance
+            cursor.execute("SELECT SUM(amount) AS total FROM assistance WHERE client_id = ?", (client_id,))
+            asst_row = cursor.fetchone()
+            total_asst = float(asst_row["total"] or 0)
+
+            # Staff
+            cursor.execute("SELECT * FROM staff WHERE client_id = ?", (client_id,))
+            staff_row = cursor.fetchone()
+            staff = dict(staff_row) if staff_row else {}
+
+            # --- 3. Process the data for the Dashboard ---
+            
+            # Seniors (60+)
+            if c.get("age") and int(c["age"]) >= 60:
+                stats["seniors"] += 1
+
+            # Coffins
+            coffin = c.get("coffin") or "Unspecified"
+            amount = float(c.get("coffinAmount") or 0)
+            
+            if coffin not in stats["coffinStats"]:
+                stats["coffinStats"][coffin] = {"count": 0, "totalAmount": 0}
+            
+            stats["coffinStats"][coffin]["count"] += 1
+            stats["coffinStats"][coffin]["totalAmount"] += amount
+            stats["grandTotalCoffinAmount"] += amount
+
+            # Locations
+            city = c.get("city") or "Unknown City"
+            province = c.get("province") or "Unknown Province"
+            loc_key = f"{city}, {province}"
+            stats["locationCounts"][loc_key] = stats["locationCounts"].get(loc_key, 0) + 1
+
+            # Plans
+            plan = c.get("plan")
+            if plan and str(plan).strip() != "" and str(plan).lower() != "none":
+                stats["planCounts"][plan] = stats["planCounts"].get(plan, 0) + 1
+
+            # Embalmers (NEW)
+            embalmer = staff.get("embalmer")
+            if embalmer and str(embalmer).strip() != "":
+                stats["embalmerStats"][embalmer] = stats["embalmerStats"].get(embalmer, 0) + 1
+
+            # Financials
+            stats["totalPayments"] += total_paid
+            stats["totalOtherCharges"] += total_oc
+            stats["totalAssistance"] += total_asst
+
+    return stats
